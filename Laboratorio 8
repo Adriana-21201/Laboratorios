@@ -1,0 +1,198 @@
+#include <SD.h>
+#include <SPI.h>
+
+#define CS_PIN 15
+
+File archivo;
+
+void setup() {
+  Serial.begin(115200);
+
+  Serial.println("Inicializando tarjeta SD...");
+
+  // Inicializa la tarjeta SD en el pin CS_PIN
+  if (!SD.begin(CS_PIN)) {
+    Serial.println("Error al inicializar la tarjeta SD");
+    while(true);
+  }
+
+  Serial.println("Tarjeta SD inicializada con éxito");
+
+  Serial.println("Archivos en la tarjeta: ");
+  archivo = SD.open("/");
+  printDirectory(archivo, 0);
+  Serial.println("");
+
+  showMenu();
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char opcion = Serial.read();
+    switch (opcion) {
+      case '1':
+        display("mario.txt");
+        showMenu();
+        break;
+      case '2':
+        display("link.txt");
+        showMenu();
+        break;
+      case '3':
+        display("luffy.txt");
+        showMenu();
+        break;
+      case '4':
+        crearImagen();
+        showMenu();
+        break;
+      case '5':
+        imagenCreada();
+        showMenu();
+        break;
+      default:
+        Serial.println("Opción no válida, por favor, elige una opción válida");
+        showMenu();
+        break;
+    }
+  }
+}
+
+// Función para imprimir el contenido de un directorio en la tarjeta SD
+void printDirectory(File dir, int numTabs) {
+  while(true) {
+    File entry = dir.openNextFile();
+    if(!entry) {
+      break;
+    }
+    for (uint8_t i = 0; i < numTabs; i++) {
+      Serial.print('\t');
+    }
+    Serial.print(entry.name());
+    if(entry.isDirectory()) {
+      Serial.println("/");
+      printDirectory(entry, numTabs + 1);
+    } else {
+      Serial.print("\t\t");
+      Serial.println(entry.size(), DEC);
+    }
+    entry.close();
+  }
+}
+
+// Función para mostrar el menú de opciones
+void showMenu() {
+  Serial.println("Bienvenido al generador de arte ASCII");
+  Serial.println("Por favor, elija una opción: ");
+  Serial.println("1. Mario Bros");
+  Serial.println("2. Link");
+  Serial.println("3. Luffy");
+  Serial.println("4. Crear imagen nueva");
+  Serial.println("5. Ver imagen personalizada");
+}
+
+// Función para mostrar el contenido de un archivo en la tarjeta SD
+void display(const char* imagePath) {
+  File imagen = SD.open(imagePath);
+  if(imagen) {
+    Serial.print(imagePath);
+    Serial.println(": ");
+    while(imagen.available()) {
+      Serial.write(imagen.read());
+    }
+    imagen.close();
+  } else {
+    Serial.println("Error al abrir el archivo");
+  }
+}
+
+// Función para leer una línea de datos desde el puerto serie
+String leer() {
+  String recibido = "";
+  char c;
+  while(true) {
+    if(Serial.available()) {
+      c = Serial.read();
+      if(c == '\n') {
+        break;
+      } else {
+        recibido += c;
+      }
+    }
+  }
+  return recibido;
+}
+
+// Función para crear una nueva imagen personalizada
+void crearImagen() {
+  String nombre;
+  String data;
+
+  Serial.println("Proporciona un nombre para tu dibujo, debe ser simple: ");
+  nombre = leer();
+
+  // Comprueba si el archivo ya existe en la tarjeta SD
+  if(SD.exists("/" + nombre + ".txt")) {
+    Serial.println("El nombre proporcionado ya existe, por favor, elige otro nombre.");
+    return;
+  }
+
+  Serial.println("Ingresa el contenido de tu dibujo. Cuando termines escribe 'FIN' en una nueva línea: ");
+  while(true) {
+    String linea = leer();
+    if(linea == "FIN") {
+      break;
+    }
+    data += linea + "\n";
+  }
+
+  File nuevaImagen = SD.open("/" + nombre + ".txt", FILE_WRITE);
+  if(nuevaImagen) {
+    nuevaImagen.print(data);
+    nuevaImagen.close();
+    Serial.println("Dibujo creado y guardado");
+  } else {
+    Serial.println("Ha ocurrido un error al guardar la imagen.");
+  }
+}
+
+// Función para mostrar dibujos personalizados y permitir la selección de uno
+void imagenCreada() {
+  Serial.println("Dibujos personalizados en la tarjeta SD: ");
+
+  File dibujo = SD.open("/");
+  int indice = 0;
+  String nombres[20]; // Límite de 20 imágenes
+
+  while(true) {
+    File entrada = dibujo.openNextFile();
+    if(!entrada) {
+      break;
+    }
+
+    if(!entrada.isDirectory() && String(entrada.name()).endsWith(".txt")) {
+      indice++;
+      nombres[indice] = entrada.name();
+      Serial.print(indice);
+      Serial.print(". ");
+      Serial.println(entrada.name());
+    }
+    entrada.close();
+  } 
+  dibujo.close();
+
+  if(indice == 0) {
+    Serial.println("No hay imágenes personalizadas para mostrar.");
+    return;
+  }
+
+  Serial.println("Introduce el número de opción que quieres ver: ");
+  while(!Serial.available());
+  int escoger = Serial.parseInt();
+
+  if(escoger > 0 && escoger <= indice) {
+    display(nombres[escoger].c_str());
+  } else {
+    Serial.println("Selección inválida");
+ }
+}
